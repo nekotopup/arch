@@ -1,21 +1,12 @@
 services:
   - type: web
     name: arch-topup
-    runtime: php
+    runtime: docker
     plan: free
     
-    # Build settings
+    # Build configuration
     buildCommand: |
-      composer install --optimize-autoloader --no-dev
-      npm install
-      npm run build
-      php artisan config:cache
-      php artisan route:cache
-      php artisan view:cache
-      php artisan storage:link
-    
-    # Start the application
-    startCommand: "php -S 0.0.0.0:$PORT --root public"
+      docker build -t arch-topup-app .
     
     # Environment variables
     envVars:
@@ -27,16 +18,46 @@ services:
         value: stderr
       - key: CACHE_DRIVER
         value: file
-      - key: QUEUE_CONNECTION
-        value: sync
       - key: SESSION_DRIVER
         value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_HOST
+        fromService:
+          name: arch-topup-db
+          type: pgsql
+          property: host
+      - key: DB_PORT
+        value: "5432"
+      - key: DB_DATABASE
+        fromService:
+          name: arch-topup-db
+          type: pgsql
+          property: database
+      - key: DB_USERNAME
+        fromService:
+          name: arch-topup-db
+          type: pgsql
+          property: user
+      - key: DB_PASSWORD
+        fromService:
+          name: arch-topup-db
+          type: pgsql
+          property: password
       - key: APP_URL
         fromService:
           type: web
           property: url
     
-    # Environment secrets (set in Render Dashboard)
+    # Environment secrets (set in Render dashboard)
     envVarsFrom:
       - APP_KEY
-      - DB_PASSWORD
+  
+  - type: pgsql
+    name: arch-topup-db
+    plan: free
+    dbName: arch_topup
+    user: postgres
+    
