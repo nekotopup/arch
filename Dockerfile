@@ -22,34 +22,26 @@ RUN apk add --no-cache \
 
 # =========================================================
 # PHP Extensions
-# Install separately so build errors are easy to identify
 # =========================================================
 
-# BCMath
 RUN docker-php-ext-install bcmath
 
-# Mbstring
 RUN docker-php-ext-install mbstring
 
-# MySQL
 RUN docker-php-ext-install pdo_mysql
 
-# PostgreSQL
 RUN docker-php-ext-install pdo_pgsql
 
-# SQLite
 RUN docker-php-ext-install pdo_sqlite
 
-# XML
 RUN docker-php-ext-install xml
 
-# ZIP
 RUN docker-php-ext-install zip
 
 # =========================================================
-# Verify PHP extensions
+# Check PHP
 # =========================================================
-RUN php -m
+RUN php -v && php -m
 
 # =========================================================
 # Composer
@@ -98,11 +90,9 @@ RUN chown -R www-data:www-data /app \
 # =========================================================
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
-COPY docker/php-fpm.conf \
-    /usr/local/etc/php-fpm.conf
+COPY docker/php-fpm.conf /usr/local/etc/php-fpm.conf
 
-COPY docker/supervisord.conf \
-    /etc/supervisor/conf.d/supervisord.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # =========================================================
 # Laravel setup
@@ -139,11 +129,6 @@ HEALTHCHECK \
     CMD curl -f http://localhost/health || exit 1
 
 # =========================================================
-# Start
+# Start Supervisor
 # =========================================================
-CMD [
-    "/usr/bin/supervisord",
-    "-c",
-    "/etc/supervisor/conf.d/supervisord.conf"
-]
-
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
