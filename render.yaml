@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: arch-topup
+    runtime: php
+    plan: free
+    
+    # Build settings
+    buildCommand: |
+      composer install --optimize-autoloader --no-dev
+      npm install
+      npm run build
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+      php artisan storage:link
+    
+    # Start the application
+    startCommand: "php -S 0.0.0.0:$PORT --root public"
+    
+    # Environment variables
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: LOG_CHANNEL
+        value: stderr
+      - key: CACHE_DRIVER
+        value: file
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: SESSION_DRIVER
+        value: file
+      - key: APP_URL
+        fromService:
+          type: web
+          property: url
+    
+    # Environment secrets (set in Render Dashboard)
+    envVarsFrom:
+      - APP_KEY
+      - DB_PASSWORD
