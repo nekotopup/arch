@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arch-topup
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./:/app
+      - ./storage:/app/storage:delegated
+      - ./bootstrap/cache:/app/bootstrap/cache:delegated
+    ports:
+      - "${APP_PORT:-8000}:80"
+    environment:
+      APP_NAME: "${APP_NAME}"
+      APP_ENV: "${APP_ENV}"
+      APP_DEBUG: "${APP_DEBUG}"
+      APP_KEY: "${APP_KEY}"
+      APP_URL: "${APP_URL}"
+      DB_CONNECTION: "${DB_CONNECTION}"
+      DB_HOST: "${DB_HOST}"
+      DB_PORT: "${DB_PORT}"
+      DB_DATABASE: "${DB_DATABASE}"
+      DB_USERNAME: "${DB_USERNAME}"
+      DB_PASSWORD: "${DB_PASSWORD}"
+      CACHE_DRIVER: "${CACHE_DRIVER}"
+      QUEUE_CONNECTION: "${QUEUE_CONNECTION}"
+      SESSION_DRIVER: "${SESSION_DRIVER}"
+      LOG_CHANNEL: "${LOG_CHANNEL}"
+    depends_on:
+      - postgres
+    networks:
+      - arch-topup
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: arch-topup-db
+    restart: unless-stopped
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: "${DB_DATABASE:-arch_topup}"
+      POSTGRES_USER: "${DB_USERNAME:-postgres}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD:-password}"
+    ports:
+      - "5432:5432"
+    networks:
+      - arch-topup
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  arch-topup:
+    driver: bridge
