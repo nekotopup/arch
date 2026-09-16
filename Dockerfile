@@ -17,20 +17,39 @@ RUN apk add --no-cache \
     postgresql-dev \
     mysql-client \
     oniguruma-dev \
-    libzip-dev
+    libzip-dev \
+    libxml2-dev
 
 # =========================================================
 # PHP Extensions
+# Install separately so build errors are easy to identify
 # =========================================================
-RUN docker-php-ext-install -j$(nproc) \
-    bcmath \
-    mbstring \
-    pdo \
-    pdo_mysql \
-    pdo_pgsql \
-    pdo_sqlite \
-    xml \
-    zip
+
+# BCMath
+RUN docker-php-ext-install bcmath
+
+# Mbstring
+RUN docker-php-ext-install mbstring
+
+# MySQL
+RUN docker-php-ext-install pdo_mysql
+
+# PostgreSQL
+RUN docker-php-ext-install pdo_pgsql
+
+# SQLite
+RUN docker-php-ext-install pdo_sqlite
+
+# XML
+RUN docker-php-ext-install xml
+
+# ZIP
+RUN docker-php-ext-install zip
+
+# =========================================================
+# Verify PHP extensions
+# =========================================================
+RUN php -m
 
 # =========================================================
 # Composer
@@ -38,13 +57,10 @@ RUN docker-php-ext-install -j$(nproc) \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================================================
-# Application directory
+# Application
 # =========================================================
 WORKDIR /app
 
-# =========================================================
-# Copy application
-# =========================================================
 COPY . .
 
 # =========================================================
@@ -73,44 +89,42 @@ RUN mkdir -p \
 # Permissions
 # =========================================================
 RUN chown -R www-data:www-data /app \
-    && chmod -R 755 storage bootstrap/cache \
+    && chmod -R 755 storage \
+    && chmod -R 755 bootstrap/cache \
     && chmod -R 775 storage/logs
 
 # =========================================================
-# Nginx configuration
+# Docker configuration
 # =========================================================
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
-# =========================================================
-# PHP-FPM configuration
-# =========================================================
-COPY docker/php-fpm.conf /usr/local/etc/php-fpm.conf
+COPY docker/php-fpm.conf \
+    /usr/local/etc/php-fpm.conf
+
+COPY docker/supervisord.conf \
+    /etc/supervisor/conf.d/supervisord.conf
 
 # =========================================================
-# Supervisor configuration
-# =========================================================
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-# =========================================================
-# Laravel configuration
+# Laravel setup
 # =========================================================
 
-# Generate APP_KEY only if possible.
-# In production, preferably provide APP_KEY through environment variables.
-RUN php artisan key:generate --force || echo "Key generation skipped"
+RUN php artisan key:generate --force \
+    || echo "Key generation skipped"
 
-# Cache Laravel configuration
-RUN php artisan config:cache || echo "Config cache skipped"
+RUN php artisan config:cache \
+    || echo "Config cache skipped"
 
-RUN php artisan route:cache || echo "Route cache skipped"
+RUN php artisan route:cache \
+    || echo "Route cache skipped"
 
-RUN php artisan view:cache || echo "View cache skipped"
+RUN php artisan view:cache \
+    || echo "View cache skipped"
 
-# Create storage symlink
-RUN php artisan storage:link || echo "Storage link skipped"
+RUN php artisan storage:link \
+    || echo "Storage link skipped"
 
 # =========================================================
-# Expose HTTP port
+# Port
 # =========================================================
 EXPOSE 80
 
@@ -125,6 +139,11 @@ HEALTHCHECK \
     CMD curl -f http://localhost/health || exit 1
 
 # =========================================================
-# Start Supervisor
+# Start
 # =========================================================
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+CMD [
+    "/usr/bin/supervisord",
+    "-c",
+    "/etc/supervisor/conf.d/supervisord.conf"
+]
+
