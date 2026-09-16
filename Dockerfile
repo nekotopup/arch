@@ -128,4 +128,3 @@ HEALTHCHECK \
 # Start Supervisor
 # =========================================================
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
-```
