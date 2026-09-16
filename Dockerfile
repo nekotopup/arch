@@ -14,6 +14,7 @@ RUN apk add --no-cache \
     supervisor \
     sqlite \
     sqlite-libs \
+    sqlite-dev \
     postgresql-dev \
     mysql-client \
     oniguruma-dev \
@@ -39,9 +40,10 @@ RUN docker-php-ext-install xml
 RUN docker-php-ext-install zip
 
 # =========================================================
-# Check PHP
+# Verify PHP
 # =========================================================
-RUN php -v && php -m
+RUN php -v
+RUN php -m
 
 # =========================================================
 # Composer
@@ -86,16 +88,23 @@ RUN chown -R www-data:www-data /app \
     && chmod -R 775 storage/logs
 
 # =========================================================
-# Docker configuration
+# Nginx
 # =========================================================
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 
+# =========================================================
+# PHP-FPM
+# =========================================================
 COPY docker/php-fpm.conf /usr/local/etc/php-fpm.conf
 
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+# =========================================================
+# Supervisor
+# =========================================================
+COPY docker/supervisord.conf \
+    /etc/supervisor/conf.d/supervisord.conf
 
 # =========================================================
-# Laravel setup
+# Laravel
 # =========================================================
 
 RUN php artisan key:generate --force \
@@ -129,6 +138,7 @@ HEALTHCHECK \
     CMD curl -f http://localhost/health || exit 1
 
 # =========================================================
-# Start Supervisor
+# Start
 # =========================================================
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+
