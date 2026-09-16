@@ -1,3 +1,4 @@
+
 FROM php:8.2-fpm-alpine
 
 LABEL maintainer="Arch Topup"
@@ -16,32 +17,20 @@ RUN apk add --no-cache \
     postgresql-dev \
     mysql-client \
     oniguruma-dev \
-    libzip-dev \
-    icu-dev \
-    libxml2-dev \
-    freetype-dev \
-    libjpeg-turbo-dev \
-    libpng-dev \
-    $PHPIZE_DEPS
+    libzip-dev
 
 # =========================================================
-# PHP extensions
+# PHP Extensions
 # =========================================================
-RUN docker-php-ext-configure gd \
-        --with-freetype \
-        --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        bcmath \
-        exif \
-        gd \
-        intl \
-        mbstring \
-        pdo \
-        pdo_mysql \
-        pdo_pgsql \
-        pdo_sqlite \
-        xml \
-        zip
+RUN docker-php-ext-install -j$(nproc) \
+    bcmath \
+    mbstring \
+    pdo \
+    pdo_mysql \
+    pdo_pgsql \
+    pdo_sqlite \
+    xml \
+    zip
 
 # =========================================================
 # Composer
@@ -49,10 +38,13 @@ RUN docker-php-ext-configure gd \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 # =========================================================
-# Application
+# Application directory
 # =========================================================
 WORKDIR /app
 
+# =========================================================
+# Copy application
+# =========================================================
 COPY . .
 
 # =========================================================
@@ -85,29 +77,55 @@ RUN chown -R www-data:www-data /app \
     && chmod -R 775 storage/logs
 
 # =========================================================
-# Docker configuration
+# Nginx configuration
 # =========================================================
 COPY docker/nginx.conf /etc/nginx/nginx.conf
+
+# =========================================================
+# PHP-FPM configuration
+# =========================================================
 COPY docker/php-fpm.conf /usr/local/etc/php-fpm.conf
+
+# =========================================================
+# Supervisor configuration
+# =========================================================
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # =========================================================
-# Laravel cache
+# Laravel configuration
 # =========================================================
-RUN php artisan config:cache || echo "Config cache skipped" \
-    && php artisan route:cache || echo "Route cache skipped" \
-    && php artisan view:cache || echo "View cache skipped" \
-    && php artisan storage:link || echo "Storage link skipped"
 
+# Generate APP_KEY only if possible.
+# In production, preferably provide APP_KEY through environment variables.
+RUN php artisan key:generate --force || echo "Key generation skipped"
+
+# Cache Laravel configuration
+RUN php artisan config:cache || echo "Config cache skipped"
+
+RUN php artisan route:cache || echo "Route cache skipped"
+
+RUN php artisan view:cache || echo "View cache skipped"
+
+# Create storage symlink
+RUN php artisan storage:link || echo "Storage link skipped"
+
+# =========================================================
+# Expose HTTP port
+# =========================================================
 EXPOSE 80
 
 # =========================================================
 # Health check
 # =========================================================
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+HEALTHCHECK \
+    --interval=30s \
+    --timeout=10s \
+    --start-period=40s \
+    --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
 # =========================================================
-# Start
+# Start Supervisor
 # =========================================================
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+```
