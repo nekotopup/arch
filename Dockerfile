@@ -9,19 +9,18 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --legacy-peer-deps
 
-# Copy files needed for Vite build (only what exists)
+# Copy source files for Vite build
 COPY vite.config.js ./
 COPY resources ./resources
 COPY public ./public
 
-# Build frontend (continue even if there are warnings)
+# Build frontend (continue even if warnings)
 RUN npm run build || true
-
 
 # Stage 2: PHP - Application runtime
 FROM php:8.2-fpm-alpine
 
-LABEL maintainer="Arch Topup Team"
+LABEL maintainer="Arch Topup"
 
 # Install system dependencies
 RUN apk add --no-cache \
@@ -35,7 +34,7 @@ RUN apk add --no-cache \
     nginx \
     bash
 
-# Install PHP extensions required by Laravel
+# Install PHP extensions
 RUN docker-php-ext-install \
     pdo \
     pdo_sqlite \
@@ -52,15 +51,16 @@ RUN docker-php-ext-install \
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set working directory
 WORKDIR /app
 
-# Copy PHP application files
+# Copy entire Laravel application
 COPY --chown=www-data:www-data . .
 
-# Copy built frontend from node builder (skip if not exists)
-RUN mkdir -p public/build 2>/dev/null || true
-COPY --from=node-builder /app/public/build ./public/build 2>/dev/null || true
+# Create public/build directory
+RUN mkdir -p public/build
+
+# Copy built assets from node stage (if they exist)
+COPY --from=node-builder /app/public/build/ ./public/build/ || true
 
 # Install PHP dependencies
 RUN composer install \
@@ -69,40 +69,32 @@ RUN composer install \
     --no-interaction \
     --no-progress
 
-# Create necessary directories
+# Create required directories and set permissions
 RUN mkdir -p \
     storage/logs \
     storage/app \
     storage/framework/views \
     storage/framework/cache \
+    storage/framework/sessions \
     bootstrap/cache \
-    database
-
-# Set proper permissions
-RUN chown -R www-data:www-data /app && \
+    database && \
+    chown -R www-data:www-data /app && \
     chmod -R 755 storage bootstrap/cache && \
     chmod -R 775 storage/logs
 
-# Copy docker configuration files
+# Copy nginx, PHP-FPM, and supervisor configs
 COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/php-fpm.conf /usr/local/etc/php-fpm.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Create storage subdirectories
-RUN mkdir -p storage/framework/{sessions,views,cache} && \
-    chown -R www-data:www-data storage
+# Generate app key (optional, will be overridden by env var)
+RUN php artisan key:generate --force || true
 
-# Generate app key
-RUN php artisan key:generate --force 2>/dev/null || true
-
-# Cache configuration for production
-RUN php artisan config:cache 2>/dev/null || true && \
-    php artisan route:cache 2>/dev/null || true && \
-    php artisan view:cache 2>/dev/null || true && \
-    php artisan storage:link 2>/dev/null || true
-
-# Create simple health check endpoint
-RUN echo '<?php echo "OK";' > public/health.php
+# Cache config and routes for production
+RUN php artisan config:cache || true && \
+    php artisan route:cache || true && \
+    php artisan view:cache || true && \
+    php artisan storage:link || true
 
 # Expose port
 EXPOSE 80
@@ -111,5 +103,5 @@ EXPOSE 80
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
-# Run supervisor
+# Start supervisor to manage nginx and php-fpm
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
