@@ -15,8 +15,6 @@ COPY . .
 # Build frontend (with error handling)
 RUN npm run build || echo "Build output: $(ls -la public/ 2>/dev/null || echo 'public/ not found')" || true
 
----
-
 # Stage 2: PHP - Application runtime
 FROM php:8.2-fpm-alpine
 
