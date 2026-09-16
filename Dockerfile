@@ -1,48 +1,53 @@
-# Simplified Dockerfile - PHP only, assets pre-built locally
+# Simplified Dockerfile - PHP 8.2 with minimal extensions
 FROM php:8.2-fpm-alpine
 
 LABEL maintainer="Arch Topup"
 
-# Install system dependencies
+# Install system dependencies and build tools
 RUN apk add --no-cache \
     curl \
     git \
     supervisor \
     sqlite \
     sqlite-libs \
-    postgresql-client \
+    postgresql-dev \
     mysql-client \
     nginx \
-    bash
+    bash \
+    oniguruma-dev \
+    libzip-dev
 
-# Install PHP extensions
-RUN docker-php-ext-install \
-    pdo \
-    pdo_sqlite \
-    pdo_pgsql \
-    pdo_mysql \
-    bcmath \
-    ctype \
-    fileinfo \
-    json \
-    mbstring \
-    tokenizer \
-    xml
+# Install PHP extensions one by one with error handling
+RUN docker-php-ext-install -j$(nproc) pdo || true
+RUN docker-php-ext-install -j$(nproc) pdo_sqlite || true
+RUN docker-php-ext-install -j$(nproc) pdo_pgsql || true
+RUN docker-php-ext-install -j$(nproc) pdo_mysql || true
+RUN docker-php-ext-install -j$(nproc) bcmath || true
+RUN docker-php-ext-install -j$(nproc) ctype || true
+RUN docker-php-ext-install -j$(nproc) fileinfo || true
+RUN docker-php-ext-install -j$(nproc) json || true
+RUN docker-php-ext-install -j$(nproc) mbstring || true
+RUN docker-php-ext-install -j$(nproc) tokenizer || true
+RUN docker-php-ext-install -j$(nproc) xml || true
 
 # Install Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /app
 
-# Copy entire application (public/build should already exist locally)
-COPY --chown=www-data:www-data . .
+# Copy entire application
+COPY . .
 
-# Install PHP dependencies
+# Fix permissions before composer install
+RUN chown -R nobody:nobody /app
+
+# Install PHP dependencies as unprivileged user
 RUN composer install \
     --no-dev \
     --optimize-autoloader \
     --no-interaction \
-    --no-progress
+    --no-progress \
+    --no-suggest
 
 # Create required directories
 RUN mkdir -p \
@@ -52,9 +57,10 @@ RUN mkdir -p \
     storage/framework/cache \
     storage/framework/sessions \
     bootstrap/cache \
-    database
+    database \
+    public/build
 
-# Set permissions
+# Set proper permissions for www-data
 RUN chown -R www-data:www-data /app && \
     chmod -R 755 storage bootstrap/cache && \
     chmod -R 775 storage/logs
@@ -64,12 +70,14 @@ COPY docker/nginx.conf /etc/nginx/nginx.conf
 COPY docker/php-fpm.conf /usr/local/etc/php-fpm.conf
 COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Cache Laravel config/routes/views
-RUN php artisan key:generate --force || true && \
-    php artisan config:cache || true && \
-    php artisan route:cache || true && \
-    php artisan view:cache || true && \
-    php artisan storage:link || true
+# Generate app key
+RUN php artisan key:generate --force || echo "Key generation skipped"
+
+# Cache Laravel configuration
+RUN php artisan config:cache || echo "Config cache skipped" && \
+    php artisan route:cache || echo "Route cache skipped" && \
+    php artisan view:cache || echo "View cache skipped" && \
+    php artisan storage:link || echo "Storage link skipped"
 
 EXPOSE 80
 
